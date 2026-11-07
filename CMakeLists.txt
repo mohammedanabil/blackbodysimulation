@@ -28,6 +28,7 @@ add_library(blackbody_data STATIC
     src/data/stb_image_write.cpp
 )
 target_link_libraries(blackbody_data PUBLIC blackbody_core)
+target_link_libraries(blackbody_data PUBLIC xlsxwriter)
 target_include_directories(blackbody_data
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
@@ -58,7 +59,13 @@ FetchContent_Declare(
     stb
     URL https://github.com/nothings/stb/archive/refs/heads/master.zip
 )
-FetchContent_MakeAvailable(Catch2 glfw glad imgui implot stb)
+FetchContent_Declare(
+    xlsxwriter
+    URL https://github.com/jmcnamara/libxlsxwriter/archive/refs/tags/v1.2.2.zip
+)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(Catch2 glfw glad imgui implot stb xlsxwriter)
 
 target_include_directories(blackbody_data PUBLIC ${stb_SOURCE_DIR})
 

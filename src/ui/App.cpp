@@ -164,7 +164,7 @@ void App::run()
         if (actions.exportExcel) {
             Exporter::toExcel(
                 spectrum,
-                std::filesystem::path("blackbody_spectrum.xls"));
+                std::filesystem::path("blackbody_spectrum.xlsx"));
         }
         PlotPanel::render(
             spectrum,

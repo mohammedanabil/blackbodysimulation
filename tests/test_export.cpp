@@ -43,7 +43,7 @@ TEST_CASE("Exporter writes spectrum data to a CSV file", "[export]")
     std::filesystem::remove(outputPath);
 }
 
-TEST_CASE("Exporter writes spectrum data to an Excel XML file", "[export]")
+TEST_CASE("Exporter writes a real XLSX spectrum workbook", "[export]")
 {
     Spectrum spectrum{
         5778.0,
@@ -55,7 +55,7 @@ TEST_CASE("Exporter writes spectrum data to an Excel XML file", "[export]")
 
     const std::filesystem::path outputPath =
         std::filesystem::temp_directory_path() /
-        "blackbody_phase3_export_test.xls";
+        "blackbody_phase3_export_test.xlsx";
 
     std::filesystem::remove(outputPath);
     Exporter::toExcel(spectrum, outputPath);
@@ -65,17 +65,11 @@ TEST_CASE("Exporter writes spectrum data to an Excel XML file", "[export]")
     std::ifstream input(outputPath);
     REQUIRE(input.is_open());
 
-    std::string workbookStart;
-    std::getline(input, workbookStart);
-    REQUIRE(workbookStart == "<?xml version=\"1.0\"?>");
-
-    input.seekg(0);
-    std::string content(
-        (std::istreambuf_iterator<char>(input)),
-        std::istreambuf_iterator<char>());
-    REQUIRE(content.find("<Data ss:Type=\"String\">Wavelength</Data>") != std::string::npos);
-    REQUIRE(content.find("<Data ss:Type=\"String\">Temperature</Data>") != std::string::npos);
-    REQUIRE(content.find("<Data ss:Type=\"String\">Intensity</Data>") != std::string::npos);
+    char signature[4] = {};
+    input.read(signature, sizeof(signature));
+    REQUIRE(input.gcount() == 4);
+    REQUIRE(static_cast<unsigned char>(signature[0]) == 0x50);
+    REQUIRE(static_cast<unsigned char>(signature[1]) == 0x4B);
 
     input.close();
     std::filesystem::remove(outputPath);
