@@ -8,7 +8,7 @@ struct Spectrum {
     double minimumWavelengthMeters = 0.0;
     double maximumWavelengthMeters = 0.0;
     std::vector<double> wavelengths;
-    std::vector<double> intensities;
+    std::vector<double> exitances;
 };
 
 class SpectrumGenerator {

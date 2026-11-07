@@ -1,12 +1,12 @@
 # Blackbody Radiation Simulation
 
-A C++20 desktop simulation that visualizes blackbody spectral radiance, displays the
+A C++20 desktop simulation that visualizes blackbody spectral exitance, displays the
 derived visible color, compares the Rayleigh-Jeeans approximation, and exports
 spectrum data and plot images.
 
 ## Physics
 
-### Planck spectral radiance
+### Planck spectral exitance
 
 For wavelength `lambda` in meters and absolute temperature `T` in kelvin:
 
@@ -38,13 +38,13 @@ P/A = sigma * T^4
 ```
 
 The Planck exponential is evaluated through overflow-safe logic. Values with
-very large exponents are treated as effectively zero spectral radiance.
+very large exponents are treated as effectively zero spectral exitance.
 
 ## Algorithm
 
 1. The application accepts a temperature between 1000 K and 10000 K.
 2. It generates 1200 wavelength samples uniformly from 100 nm to 3000 nm.
-3. For each wavelength, it calculates spectral radiance with Planck's law.
+3. For each wavelength, it calculates spectral exitance with Planck's law.
 4. It optionally calculates the Rayleigh-Jeans approximation for comparison.
 5. Wien's displacement law is used to find the expected wavelength of maximum
    emission.
@@ -77,7 +77,7 @@ table resolution affect the resulting colors.
 - Sun, Betelgeuse, and Sirius presets
 - Interactive ImPlot radiation curve
 - Optional Rayleigh-Jeans approximation
-- Optional logarithmic intensity axis
+- Optional logarithmic spectral exitance axis
 - Derived blackbody color swatch
 - Spectrum export to CSV
 - Window-frame export to PNG

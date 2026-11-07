@@ -11,9 +11,9 @@ void Exporter::toCSV(
     const Spectrum& spectrum,
     const std::filesystem::path& outputPath)
 {
-    if (spectrum.wavelengths.size() != spectrum.intensities.size()) {
+    if (spectrum.wavelengths.size() != spectrum.exitances.size()) {
         throw std::invalid_argument(
-            "Spectrum wavelength and intensity vectors must have equal sizes");
+            "Spectrum wavelength and exitance vectors must have equal sizes");
     }
 
     if (outputPath.empty()) {
@@ -33,10 +33,12 @@ void Exporter::toCSV(
 
     output.exceptions(std::ios::failbit | std::ios::badbit);
     output << std::scientific << std::setprecision(17);
-    output << "wavelength_meters,intensity_si_per_spectrum\n";
+    output << "Wavelength (m),Wavelength (nm),Temperature (K),Spectral Exitance (W/m³)\n";
     for (std::size_t index = 0; index < spectrum.wavelengths.size(); ++index) {
         output << spectrum.wavelengths[index] << ','
-               << spectrum.intensities[index] << '\n';
+               << spectrum.wavelengths[index] * 1.0e9 << ','
+               << spectrum.temperatureKelvin << ','
+               << spectrum.exitances[index] << '\n';
     }
 
     output.close();
@@ -50,9 +52,9 @@ void Exporter::toExcel(
     const Spectrum& spectrum,
     const std::filesystem::path& outputPath)
 {
-    if (spectrum.wavelengths.size() != spectrum.intensities.size()) {
+    if (spectrum.wavelengths.size() != spectrum.exitances.size()) {
         throw std::invalid_argument(
-            "Spectrum wavelength and intensity vectors must have equal sizes");
+            "Spectrum wavelength and exitance vectors must have equal sizes");
     }
 
     if (outputPath.empty()) {
@@ -76,27 +78,32 @@ void Exporter::toExcel(
     format_set_bg_color(redFormat, 0xFF0000);
     format_set_font_color(redFormat, 0xFFFFFF);
 
-    worksheet_write_string(worksheet, 0, 0, "Wavelength", headerFormat);
-    worksheet_write_string(worksheet, 0, 1, "Temperature", headerFormat);
-    worksheet_write_string(worksheet, 0, 2, "Intensity", headerFormat);
+    worksheet_write_string(worksheet, 0, 0, "Wavelength (m)", headerFormat);
+    worksheet_write_string(worksheet, 0, 1, "Wavelength (nm)", headerFormat);
+    worksheet_write_string(worksheet, 0, 2, "Temperature (K)", headerFormat);
+    worksheet_write_string(
+        worksheet, 0, 3, "Spectral Exitance (W/m³)", headerFormat);
 
-    std::size_t maximumWavelengthIndex = 0;
+    std::size_t peakExitanceIndex = 0;
     for (std::size_t index = 0; index < spectrum.wavelengths.size(); ++index) {
-        if (spectrum.wavelengths[index] > spectrum.wavelengths[maximumWavelengthIndex]) {
-            maximumWavelengthIndex = index;
+        if (spectrum.exitances[index] > spectrum.exitances[peakExitanceIndex]) {
+            peakExitanceIndex = index;
         }
     }
 
     for (std::size_t index = 0; index < spectrum.wavelengths.size(); ++index) {
         const lxw_row_t excelRow = static_cast<lxw_row_t>(index + 1);
         lxw_format* wavelengthFormat =
-            index == maximumWavelengthIndex ? redFormat : nullptr;
+            index == peakExitanceIndex ? redFormat : nullptr;
         worksheet_write_number(
             worksheet, excelRow, 0, spectrum.wavelengths[index], wavelengthFormat);
         worksheet_write_number(
-            worksheet, excelRow, 1, spectrum.temperatureKelvin, nullptr);
+            worksheet, excelRow, 1,
+            spectrum.wavelengths[index] * 1.0e9, wavelengthFormat);
         worksheet_write_number(
-            worksheet, excelRow, 2, spectrum.intensities[index], nullptr);
+            worksheet, excelRow, 2, spectrum.temperatureKelvin, nullptr);
+        worksheet_write_number(
+            worksheet, excelRow, 3, spectrum.exitances[index], nullptr);
     }
 
     worksheet_set_column(worksheet, 0, 2, 18, nullptr);

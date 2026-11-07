@@ -34,7 +34,7 @@ Spectrum SpectrumGenerator::generate(
         {}
     };
     spectrum.wavelengths.reserve(steps);
-    spectrum.intensities.reserve(steps);
+    spectrum.exitances.reserve(steps);
 
     const double interval = maximumWavelengthMeters - minimumWavelengthMeters;
     for (std::size_t index = 0; index < steps; ++index) {
@@ -42,7 +42,7 @@ Spectrum SpectrumGenerator::generate(
             static_cast<double>(index) / static_cast<double>(steps - 1);
         const double wavelength = minimumWavelengthMeters + fraction * interval;
         spectrum.wavelengths.push_back(wavelength);
-        spectrum.intensities.push_back(
+        spectrum.exitances.push_back(
             PlanckModel::planck(wavelength, temperatureKelvin));
     }
 

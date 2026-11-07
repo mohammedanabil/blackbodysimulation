@@ -100,9 +100,9 @@ RGB ColorConverter::spectrumToRGB(
     const Spectrum& spectrum,
     const std::filesystem::path& cieTablePath)
 {
-    if (spectrum.wavelengths.size() != spectrum.intensities.size()) {
+    if (spectrum.wavelengths.size() != spectrum.exitances.size()) {
         throw std::invalid_argument(
-            "Spectrum wavelength and intensity vectors must have equal sizes");
+            "Spectrum wavelength and exitance vectors must have equal sizes");
     }
     if (spectrum.wavelengths.empty()) {
         throw std::invalid_argument("Spectrum must contain at least one sample");
@@ -118,15 +118,15 @@ RGB ColorConverter::spectrumToRGB(
         const double wavelengthEnd = cie[index].wavelengthMeters;
         const double bandWidth = wavelengthEnd - wavelengthStart;
 
-        const double intensityStart =
-            interpolate(spectrum.wavelengths, spectrum.intensities, wavelengthStart);
-        const double intensityEnd =
-            interpolate(spectrum.wavelengths, spectrum.intensities, wavelengthEnd);
-        const double intensity = 0.5 * (intensityStart + intensityEnd);
+        const double exitanceStart =
+            interpolate(spectrum.wavelengths, spectrum.exitances, wavelengthStart);
+        const double exitanceEnd =
+            interpolate(spectrum.wavelengths, spectrum.exitances, wavelengthEnd);
+        const double exitance = 0.5 * (exitanceStart + exitanceEnd);
 
-        x += cie[index].x * intensity * bandWidth;
-        y += cie[index].y * intensity * bandWidth;
-        z += cie[index].z * intensity * bandWidth;
+        x += cie[index].x * exitance * bandWidth;
+        y += cie[index].y * exitance * bandWidth;
+        z += cie[index].z * exitance * bandWidth;
     }
 
     const double xyzSum = x + y + z;

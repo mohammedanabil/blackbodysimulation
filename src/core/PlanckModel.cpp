@@ -25,17 +25,19 @@ double PlanckModel::planck(double wavelengthMeters, double temperatureKelvin)
     const double exponent = (Constants::planck * Constants::speedOfLight) /
                             (wavelengthMeters * Constants::boltzmann * temperatureKelvin);
 
-    constexpr double logMaximumDouble = 709.782712893384;
-    if (exponent > logMaximumDouble) {
+    if (exponent > 700.0) {
+        return 0.0;
+    }
+    if (!std::isfinite(exponent)) {
         return 0.0;
     }
 
-    const double numerator = 2.0 * Constants::planck *
-                             Constants::speedOfLight * Constants::speedOfLight;
     const double wavelengthToFifth = std::pow(wavelengthMeters, 5);
     const double denominator = std::expm1(exponent);
 
-    return numerator / (wavelengthToFifth * denominator);
+    return 2.0 * Constants::pi * Constants::planck *
+           Constants::speedOfLight * Constants::speedOfLight /
+           (wavelengthToFifth * denominator);
 }
 
 double PlanckModel::rayleighJeans(double wavelengthMeters, double temperatureKelvin)
@@ -43,7 +45,8 @@ double PlanckModel::rayleighJeans(double wavelengthMeters, double temperatureKel
     validatePositive(wavelengthMeters, "wavelength must be positive and finite");
     validatePositive(temperatureKelvin, "temperature must be positive and finite");
 
-    return 2.0 * Constants::speedOfLight * Constants::boltzmann * temperatureKelvin /
+    return 2.0 * Constants::pi * Constants::speedOfLight *
+           Constants::boltzmann * temperatureKelvin /
            std::pow(wavelengthMeters, 4);
 }
 

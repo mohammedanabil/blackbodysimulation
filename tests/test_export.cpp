@@ -33,7 +33,8 @@ TEST_CASE("Exporter writes spectrum data to a CSV file", "[export]")
 
     std::string header;
     std::getline(input, header);
-    REQUIRE(header == "wavelength_meters,intensity_si_per_spectrum");
+    REQUIRE(header ==
+        "Wavelength (m),Wavelength (nm),Temperature (K),Spectral Exitance (W/m³)");
 
     std::string firstRow;
     std::getline(input, firstRow);

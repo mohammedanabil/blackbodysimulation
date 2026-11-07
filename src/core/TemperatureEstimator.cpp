@@ -13,13 +13,13 @@ namespace {
 bool validSpectrum(const Spectrum& spectrum)
 {
     const std::size_t size = spectrum.wavelengths.size();
-    if (size < 2 || size != spectrum.intensities.size()) {
+    if (size < 2 || size != spectrum.exitances.size()) {
         return false;
     }
 
     for (std::size_t i = 0; i < size; ++i) {
         if (!std::isfinite(spectrum.wavelengths[i]) ||
-            !std::isfinite(spectrum.intensities[i]) ||
+            !std::isfinite(spectrum.exitances[i]) ||
             spectrum.wavelengths[i] <= 0.0) {
             return false;
         }
@@ -56,10 +56,10 @@ TemperatureEstimate TemperatureEstimator::wien(const Spectrum& spectrum)
     }
 
     std::size_t peakIndex = 0;
-    double peakIntensity = -std::numeric_limits<double>::infinity();
-    for (std::size_t i = 0; i < spectrum.intensities.size(); ++i) {
-        if (spectrum.intensities[i] > peakIntensity) {
-            peakIntensity = spectrum.intensities[i];
+    double peakExitance = -std::numeric_limits<double>::infinity();
+    for (std::size_t i = 0; i < spectrum.exitances.size(); ++i) {
+        if (spectrum.exitances[i] > peakExitance) {
+            peakExitance = spectrum.exitances[i];
             peakIndex = i;
         }
     }
@@ -92,7 +92,7 @@ TemperatureEstimate TemperatureEstimator::planckFit(
     }
 
     double signalPeak = 0.0;
-    for (double value : spectrum.intensities) {
+    for (double value : spectrum.exitances) {
         signalPeak = std::max(signalPeak, std::abs(value));
     }
     if (signalPeak <= 0.0) {
@@ -114,11 +114,11 @@ TemperatureEstimate TemperatureEstimator::planckFit(
         }
 
         double emissivity = 1.0;
-        findScale(spectrum.intensities, model, fitEmissivity, emissivity);
+        findScale(spectrum.exitances, model, fitEmissivity, emissivity);
         double residualSum = 0.0;
         for (std::size_t i = 0; i < model.size(); ++i) {
             const double residual =
-                emissivity * model[i] - spectrum.intensities[i];
+                emissivity * model[i] - spectrum.exitances[i];
             residualSum += residual * residual;
         }
         return residualSum;
@@ -166,7 +166,7 @@ TemperatureEstimate TemperatureEstimator::planckFit(
     for (double wavelength : spectrum.wavelengths) {
         model.push_back(PlanckModel::planck(wavelength, result.temperatureKelvin));
     }
-    findScale(spectrum.intensities, model, fitEmissivity, result.emissivity);
+    findScale(spectrum.exitances, model, fitEmissivity, result.emissivity);
 
     result.rmsResidual = std::sqrt(
         std::max(0.0, bestCost) / static_cast<double>(model.size()));

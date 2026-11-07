@@ -21,16 +21,16 @@ std::vector<double> wavelengthsInNanometers(const Spectrum& spectrum)
     return values;
 }
 
-std::vector<double> plottedIntensities(
+std::vector<double> plottedExitances(
     const Spectrum& spectrum,
     bool logScale)
 {
     std::vector<double> values;
-    values.reserve(spectrum.intensities.size());
-    for (double intensity : spectrum.intensities) {
+    values.reserve(spectrum.exitances.size());
+    for (double exitance : spectrum.exitances) {
         values.push_back(logScale
-            ? std::log10(std::max(intensity, 1.0e-300))
-            : intensity);
+            ? std::log10(std::max(exitance, 1.0e-300))
+            : exitance);
     }
     return values;
 }
@@ -51,33 +51,33 @@ void PlotPanel::render(
         ImPlot::SetupAxis(ImAxis_X1, "Wavelength (nm)");
         ImPlot::SetupAxis(
             ImAxis_Y1,
-            state.logScale ? "Intensity (log10)" : "Spectral Radiance");
+            state.logScale ? "Spectral Exitance (W/m³, log10)" : "Spectral Exitance (W/m³)");
         ImPlot::SetupLegend(ImPlotLocation_NorthEast);
 
         const std::vector<double> wavelengths =
             wavelengthsInNanometers(spectrum);
-        const std::vector<double> intensities =
-            plottedIntensities(spectrum, state.logScale);
+        const std::vector<double> exitances =
+            plottedExitances(spectrum, state.logScale);
         ImPlot::PlotLine(
             "Planck",
             wavelengths.data(),
-            intensities.data(),
+            exitances.data(),
             static_cast<int>(std::min(
                 wavelengths.size(),
-                intensities.size())));
+                exitances.size())));
 
         if (rayleighJeans != nullptr) {
             const std::vector<double> rjWavelengths =
                 wavelengthsInNanometers(*rayleighJeans);
-            const std::vector<double> rjIntensities =
-                plottedIntensities(*rayleighJeans, state.logScale);
+            const std::vector<double> rjExitances =
+                plottedExitances(*rayleighJeans, state.logScale);
             ImPlot::PlotLine(
                 "Rayleigh-Jeeans",
                 rjWavelengths.data(),
-                rjIntensities.data(),
+                rjExitances.data(),
                 static_cast<int>(std::min(
                     rjWavelengths.size(),
-                    rjIntensities.size())));
+                    rjExitances.size())));
         }
 
         ImPlot::EndPlot();

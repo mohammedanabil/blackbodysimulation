@@ -32,10 +32,10 @@ void framebufferSizeCallback(GLFWwindow*, int width, int height)
 Spectrum generateRayleighJeans(const Spectrum& spectrum)
 {
     Spectrum approximation = spectrum;
-    approximation.intensities.clear();
-    approximation.intensities.reserve(spectrum.wavelengths.size());
+    approximation.exitances.clear();
+    approximation.exitances.reserve(spectrum.wavelengths.size());
     for (double wavelength : spectrum.wavelengths) {
-        approximation.intensities.push_back(
+        approximation.exitances.push_back(
             PlanckModel::rayleighJeans(wavelength, spectrum.temperatureKelvin));
     }
     return approximation;

@@ -47,7 +47,7 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
         "%.0f K");
     state.temperature = static_cast<double>(temperature);
     ImGui::Checkbox("Show Rayleigh-Jeans approximation", &state.showRJ);
-    ImGui::Checkbox("Logarithmic intensity scale", &state.logScale);
+    ImGui::Checkbox("Logarithmic spectral exitance scale", &state.logScale);
     actions.estimateTemperature = ImGui::Button("Estimate Temperature");
     if (state.hasTemperatureEstimate) {
         if (state.estimateSucceeded) {
