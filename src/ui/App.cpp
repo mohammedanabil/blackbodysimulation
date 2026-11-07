@@ -62,7 +62,7 @@ App::App()
     window_ = glfwCreateWindow(
         1280,
         720,
-        "Blackbody Simulation V1.2",
+        "Blackbody Simulation V1.2.1",
         nullptr,
         nullptr);
     if (window_ == nullptr) {
