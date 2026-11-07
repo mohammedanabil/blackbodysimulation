@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,44 @@ TEST_CASE("Exporter writes spectrum data to a CSV file", "[export]")
     std::string firstRow;
     std::getline(input, firstRow);
     REQUIRE_FALSE(firstRow.empty());
+
+    input.close();
+    std::filesystem::remove(outputPath);
+}
+
+TEST_CASE("Exporter writes spectrum data to an Excel XML file", "[export]")
+{
+    Spectrum spectrum{
+        5778.0,
+        100.0e-9,
+        300.0e-9,
+        {100.0e-9, 200.0e-9, 300.0e-9},
+        {1.0, 2.5, 4.0}
+    };
+
+    const std::filesystem::path outputPath =
+        std::filesystem::temp_directory_path() /
+        "blackbody_phase3_export_test.xls";
+
+    std::filesystem::remove(outputPath);
+    Exporter::toExcel(spectrum, outputPath);
+
+    REQUIRE(std::filesystem::exists(outputPath));
+
+    std::ifstream input(outputPath);
+    REQUIRE(input.is_open());
+
+    std::string workbookStart;
+    std::getline(input, workbookStart);
+    REQUIRE(workbookStart == "<?xml version=\"1.0\"?>");
+
+    input.seekg(0);
+    std::string content(
+        (std::istreambuf_iterator<char>(input)),
+        std::istreambuf_iterator<char>());
+    REQUIRE(content.find("<Data ss:Type=\"String\">Wavelength</Data>") != std::string::npos);
+    REQUIRE(content.find("<Data ss:Type=\"String\">Temperature</Data>") != std::string::npos);
+    REQUIRE(content.find("<Data ss:Type=\"String\">Intensity</Data>") != std::string::npos);
 
     input.close();
     std::filesystem::remove(outputPath);

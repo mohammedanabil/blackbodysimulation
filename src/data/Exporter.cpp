@@ -45,6 +45,62 @@ void Exporter::toCSV(
     }
 }
 
+void Exporter::toExcel(
+    const Spectrum& spectrum,
+    const std::filesystem::path& outputPath)
+{
+    if (spectrum.wavelengths.size() != spectrum.intensities.size()) {
+        throw std::invalid_argument(
+            "Spectrum wavelength and intensity vectors must have equal sizes");
+    }
+
+    if (outputPath.empty()) {
+        throw std::invalid_argument("Excel output path must not be empty");
+    }
+
+    const std::filesystem::path parentPath = outputPath.parent_path();
+    if (!parentPath.empty()) {
+        std::filesystem::create_directories(parentPath);
+    }
+
+    std::ofstream output(outputPath, std::ios::binary);
+    if (!output.is_open()) {
+        throw std::runtime_error(
+            "Could not open Excel output file: " + outputPath.string());
+    }
+
+    output.exceptions(std::ios::failbit | std::ios::badbit);
+    output << "<?xml version=\"1.0\"?>\n";
+    output << "<?mso-application progid=\"Excel.Sheet\"?>\n";
+    output << "<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\"\n";
+    output << " xmlns:o=\"urn:schemas-microsoft-com:office:office\"\n";
+    output << " xmlns:x=\"urn:schemas-microsoft-com:office:excel\"\n";
+    output << " xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">\n";
+    output << " <Worksheet ss:Name=\"Spectrum\"><Table>\n";
+    output << "  <Row><Cell><Data ss:Type=\"String\">Wavelength</Data></Cell>";
+    output << "<Cell><Data ss:Type=\"String\">Temperature</Data></Cell>";
+    output << "<Cell><Data ss:Type=\"String\">Intensity</Data></Cell></Row>\n";
+
+    output << std::setprecision(17);
+    for (std::size_t index = 0; index < spectrum.wavelengths.size(); ++index) {
+        output << "  <Row>";
+        output << "<Cell><Data ss:Type=\"Number\">" << spectrum.wavelengths[index]
+               << "</Data></Cell>";
+        output << "<Cell><Data ss:Type=\"Number\">" << spectrum.temperatureKelvin
+               << "</Data></Cell>";
+        output << "<Cell><Data ss:Type=\"Number\">" << spectrum.intensities[index]
+               << "</Data></Cell>";
+        output << "</Row>\n";
+    }
+
+    output << " </Table></Worksheet>\n</Workbook>\n";
+    output.close();
+    if (!output) {
+        throw std::runtime_error(
+            "Could not write Excel output file: " + outputPath.string());
+    }
+}
+
 void Exporter::toPNG(
     const std::filesystem::path& outputPath,
     int width,

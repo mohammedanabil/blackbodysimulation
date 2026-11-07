@@ -62,7 +62,7 @@ App::App()
     window_ = glfwCreateWindow(
         1280,
         720,
-        "Blackbody Simulation V1.0",
+        "Blackbody Simulation V1.2",
         nullptr,
         nullptr);
     if (window_ == nullptr) {
@@ -160,6 +160,11 @@ void App::run()
             Exporter::toCSV(
                 spectrum,
                 std::filesystem::path("blackbody_spectrum.csv"));
+        }
+        if (actions.exportExcel) {
+            Exporter::toExcel(
+                spectrum,
+                std::filesystem::path("blackbody_spectrum.xls"));
         }
         PlotPanel::render(
             spectrum,

@@ -6,6 +6,7 @@ class ControlPanel {
 public:
     struct Actions {
         bool exportCSV = false;
+        bool exportExcel = false;
         bool exportPNG = false;
         bool estimateTemperature = false;
     };

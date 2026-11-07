@@ -4,6 +4,7 @@
 #include "data/StarCatalog.h"
 
 #include <imgui.h>
+#include <algorithm>
 
 ControlPanel::Actions ControlPanel::render(AppState& state)
 {
@@ -27,6 +28,16 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
         ImGui::EndCombo();
     }
 
+    double manualTemperature = state.temperature;
+    if (ImGui::InputDouble(
+            "Temperature K",
+            &manualTemperature,
+            100.0,
+            1000.0,
+            "%.0f")) {
+        manualTemperature = std::clamp(manualTemperature, 1000.0, 10000.0);
+        state.temperature = manualTemperature;
+    }
     float temperature = static_cast<float>(state.temperature);
     ImGui::SliderFloat(
         "Temperature",
@@ -53,7 +64,9 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
                                "Temperature estimate failed");
         }
     }
-    actions.exportCSV = ImGui::Button("Export Spectrum CSV");
+    actions.exportExcel = ImGui::Button("Export Spectrum Excel");
+    ImGui::SameLine();
+    actions.exportCSV = ImGui::Button("Export CSV");
     ImGui::SameLine();
     actions.exportPNG = ImGui::Button("Export Plot PNG");
     ImGui::End();
