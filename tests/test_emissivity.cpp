@@ -48,3 +48,17 @@ TEST_CASE("Spectrum generation applies the emissivity strategy", "[emissivity]")
     REQUIRE(spectrum.exitances[0] ==
             Catch::Approx(0.25 * PlanckModel::planck(500.0e-9, 3000.0)));
 }
+
+TEST_CASE("Spectrum generation accepts imported wavelength samples", "[emissivity]")
+{
+    const ConstantEmissivityModel gray(0.5);
+    const Spectrum spectrum = SpectrumGenerator::generateAtWavelengths(
+        3000.0, {700.0, 500.0, 600.0}, gray);
+
+    REQUIRE(spectrum.wavelengths.size() == 3);
+    REQUIRE(spectrum.wavelengths[0] == Catch::Approx(500.0e-9));
+    REQUIRE(spectrum.wavelengths[1] == Catch::Approx(600.0e-9));
+    REQUIRE(spectrum.wavelengths[2] == Catch::Approx(700.0e-9));
+    REQUIRE(spectrum.exitances[0] ==
+            Catch::Approx(0.5 * PlanckModel::planck(500.0e-9, 3000.0)));
+}

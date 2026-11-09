@@ -6,6 +6,7 @@
 
 #include "core/ColorConverter.h"
 #include "data/Exporter.h"
+#include "data/ExcelWavelengthImporter.h"
 #include "core/EmissivityModel.h"
 #include "core/PlanckModel.h"
 #include "core/Spectrum.h"
@@ -20,9 +21,22 @@
 
 #include <iostream>
 #include <filesystem>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace {
 
@@ -48,6 +62,40 @@ Spectrum generateRayleighJeans(
     return approximation;
 }
 
+#ifdef _WIN32
+bool chooseExcelFile(std::array<char, 1024>& filePath)
+{
+    std::array<char, 32768> selectedPath{};
+    OPENFILENAMEA dialog{};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.lpstrFilter =
+        "Excel Workbook (*.xlsx)\0*.xlsx\0All Files (*.*)\0*.*\0";
+    dialog.lpstrFile = selectedPath.data();
+    dialog.nMaxFile = static_cast<DWORD>(selectedPath.size());
+    dialog.Flags =
+        OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    if (GetOpenFileNameA(&dialog) == FALSE) {
+        const DWORD error = CommDlgExtendedError();
+        if (error != 0) {
+            throw std::runtime_error(
+                "Could not open the Excel file dialog (error " +
+                std::to_string(error) + ")");
+        }
+        return false;
+    }
+
+    if (std::strlen(selectedPath.data()) >= filePath.size()) {
+        throw std::runtime_error("Selected Excel file path is too long");
+    }
+    std::copy(
+        selectedPath.begin(),
+        selectedPath.begin() +
+            static_cast<std::ptrdiff_t>(std::strlen(selectedPath.data()) + 1),
+        filePath.begin());
+    return true;
+}
+#endif
+
 } // namespace
 
 App::App()
@@ -69,7 +117,7 @@ App::App()
     window_ = glfwCreateWindow(
         1280,
         720,
-        "Blackbody Simulation V2.0",
+        "Blackbody Simulation V2.5",
         nullptr,
         nullptr);
     if (window_ == nullptr) {
@@ -161,6 +209,71 @@ void App::run()
 
         const ControlPanel::Actions actions = ControlPanel::render(state);
         bool emissivityUpdated = false;
+        bool refreshBuiltInSpectrum = false;
+#ifdef _WIN32
+        if (actions.browseExcelFile) {
+            try {
+                if (chooseExcelFile(state.excelFilePath)) {
+                    state.excelError.clear();
+                }
+            } catch (const std::exception& error) {
+                state.excelError = error.what();
+                std::cerr << "Excel file dialog error: " << error.what()
+                          << '\n';
+            }
+        }
+#endif
+        if (actions.loadExcelFile) {
+            state.excelWavelengthsLoaded = false;
+            state.excelWavelengthsNanometers.clear();
+            try {
+                state.excelWavelengthsNanometers =
+                    ExcelWavelengthImporter::loadNanometers(
+                        std::filesystem::path(state.excelFilePath.data()));
+                state.excelWavelengthsLoaded = true;
+                state.excelError.clear();
+            } catch (const std::exception& error) {
+                state.excelError = error.what();
+                std::cerr << "Excel import error: " << error.what() << '\n';
+            }
+        }
+        if (actions.generateExcelSpectrum) {
+            try {
+                if (!std::isfinite(state.excelTemperatureKelvin) ||
+                    state.excelTemperatureKelvin <= 0.0) {
+                    throw std::invalid_argument(
+                        "Temperature must be positive and finite");
+                }
+                if (!std::isfinite(state.excelEmissivity) ||
+                    state.excelEmissivity <= 0.0 ||
+                    state.excelEmissivity >= 1.0) {
+                    throw std::invalid_argument(
+                        "Emissivity must be greater than 0 and less than 1");
+                }
+                const ConstantEmissivityModel excelEmissivity(
+                    state.excelEmissivity);
+                Spectrum importedSpectrum =
+                    SpectrumGenerator::generateAtWavelengths(
+                    state.excelTemperatureKelvin,
+                    state.excelWavelengthsNanometers,
+                    excelEmissivity);
+                const RGB importedColor = ColorConverter::spectrumToRGB(
+                    importedSpectrum, BLACKBODY_CIE_TABLE);
+                spectrum = std::move(importedSpectrum);
+                state.excelMode = true;
+                state.activeExcelEmissivity = state.excelEmissivity;
+                state.hasTemperatureEstimate = false;
+                state.excelError.clear();
+                currentColor = importedColor;
+            } catch (const std::exception& error) {
+                state.excelError = error.what();
+                std::cerr << "Excel spectrum error: " << error.what() << '\n';
+            }
+        }
+        if (actions.returnToSimulation) {
+            state.excelMode = false;
+            refreshBuiltInSpectrum = true;
+        }
         if (actions.emissivityChanged) {
             try {
                 emissivityModel = makeEmissivityModel(state.selectedMaterial);
@@ -173,7 +286,10 @@ void App::run()
                 std::cerr << "Emissivity model error: " << error.what() << '\n';
             }
         }
-        if (state.temperature != lastTemperature || emissivityUpdated) {
+        if (!state.excelMode &&
+            (refreshBuiltInSpectrum ||
+             state.temperature != lastTemperature ||
+             emissivityUpdated)) {
             spectrum = SpectrumGenerator::generate(
                 state.temperature,
                 100.0e-9,
@@ -185,8 +301,15 @@ void App::run()
                 ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
         }
         if (state.showRJ) {
-            rayleighJeans =
-                generateRayleighJeans(spectrum, *emissivityModel);
+            if (state.excelMode) {
+                const ConstantEmissivityModel excelEmissivity(
+                    state.activeExcelEmissivity);
+                rayleighJeans =
+                    generateRayleighJeans(spectrum, excelEmissivity);
+            } else {
+                rayleighJeans =
+                    generateRayleighJeans(spectrum, *emissivityModel);
+            }
             rayleighJeansValid = true;
         } else {
             rayleighJeansValid = false;

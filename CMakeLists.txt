@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(BlackbodySimulation LANGUAGES CXX)
+project(BlackbodySimulation LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,7 @@ target_include_directories(blackbody_core
 
 add_library(blackbody_data STATIC
     src/data/Exporter.cpp
+    src/data/ExcelWavelengthImporter.cpp
     src/data/StarCatalog.cpp
     src/data/stb_image_write.cpp
 )
@@ -64,9 +65,70 @@ FetchContent_Declare(
     xlsxwriter
     URL https://github.com/jmcnamara/libxlsxwriter/archive/refs/tags/v1.2.2.zip
 )
+FetchContent_Declare(
+    xlsxio
+    URL https://github.com/brechtsanders/xlsxio/archive/refs/tags/0.2.37.zip
+)
+FetchContent_Declare(
+    expat
+    URL https://github.com/libexpat/libexpat/archive/refs/tags/R_2_7_1.zip
+)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(Catch2 glfw glad imgui implot stb xlsxwriter)
+FetchContent_GetProperties(xlsxio)
+if(NOT xlsxio_POPULATED)
+    FetchContent_Populate(xlsxio)
+endif()
+
+find_package(EXPAT QUIET)
+if(EXPAT_FOUND)
+    set(EXPAT_TARGET EXPAT::EXPAT)
+else()
+    FetchContent_GetProperties(expat)
+    if(NOT expat_POPULATED)
+        FetchContent_Populate(expat)
+    endif()
+    set(EXPAT_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    set(EXPAT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(EXPAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(EXPAT_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(EXPAT_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(
+        ${expat_SOURCE_DIR}/expat
+        ${expat_BINARY_DIR}
+    )
+    set(EXPAT_TARGET expat::expat)
+endif()
+find_package(ZLIB REQUIRED)
+add_library(xlsxio_minizip STATIC
+    ${xlsxwriter_SOURCE_DIR}/third_party/minizip/ioapi.c
+    ${xlsxwriter_SOURCE_DIR}/third_party/minizip/unzip.c
+)
+target_include_directories(xlsxio_minizip PUBLIC
+    ${xlsxwriter_SOURCE_DIR}/third_party/minizip
+)
+target_link_libraries(xlsxio_minizip PUBLIC ZLIB::ZLIB)
+
+add_library(xlsxio_read STATIC
+    ${xlsxio_SOURCE_DIR}/lib/xlsxio_read.c
+    ${xlsxio_SOURCE_DIR}/lib/xlsxio_read_sharedstrings.c
+)
+target_compile_definitions(xlsxio_read PUBLIC
+    BUILD_XLSXIO
+    BUILD_XLSXIO_STATIC
+)
+target_compile_definitions(xlsxio_read PRIVATE
+    USE_MINIZIP
+)
+target_include_directories(xlsxio_read
+    PUBLIC ${xlsxio_SOURCE_DIR}/include
+    PRIVATE
+        ${xlsxio_SOURCE_DIR}/lib
+        ${xlsxwriter_SOURCE_DIR}/third_party
+)
+target_link_libraries(xlsxio_read PUBLIC xlsxio_minizip ${EXPAT_TARGET})
+target_link_libraries(blackbody_data PUBLIC xlsxio_read)
 
 target_include_directories(blackbody_data PUBLIC ${stb_SOURCE_DIR})
 
@@ -100,7 +162,7 @@ add_executable(blackbody_app
     src/ui/ColorSwatch.cpp
 )
 set_target_properties(blackbody_app PROPERTIES
-    OUTPUT_NAME "Blackbody Simulation V2.0"
+    OUTPUT_NAME "Blackbody Simulation V2.5"
 )
 target_link_libraries(blackbody_app PRIVATE
     blackbody_core
@@ -111,7 +173,7 @@ target_link_libraries(blackbody_app PRIVATE
     glad
 )
 if(WIN32)
-    target_link_libraries(blackbody_app PRIVATE opengl32)
+    target_link_libraries(blackbody_app PRIVATE opengl32 comdlg32)
 endif()
 target_compile_definitions(blackbody_app PRIVATE
     BLACKBODY_CIE_TABLE="data/cie_1931.csv"
@@ -122,6 +184,42 @@ add_custom_command(TARGET blackbody_app POST_BUILD
         ${CMAKE_CURRENT_SOURCE_DIR}/data
         $<TARGET_FILE_DIR:blackbody_app>/data
 )
+if(MINGW)
+    if(EXPAT_LIBRARY MATCHES "\\.dll\\.a$")
+        get_filename_component(EXPAT_LIBRARY_DIR "${EXPAT_LIBRARY}" DIRECTORY)
+        get_filename_component(EXPAT_PREFIX "${EXPAT_LIBRARY_DIR}" DIRECTORY)
+        find_file(EXPAT_RUNTIME_DLL
+            NAMES libexpat-1.dll expat.dll
+            PATHS "${EXPAT_PREFIX}/bin"
+            NO_DEFAULT_PATH
+        )
+        if(NOT EXPAT_RUNTIME_DLL)
+            message(FATAL_ERROR "Could not locate the Expat runtime DLL")
+        endif()
+        add_custom_command(TARGET blackbody_app POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${EXPAT_RUNTIME_DLL}"
+                $<TARGET_FILE_DIR:blackbody_app>
+        )
+    endif()
+    if(ZLIB_LIBRARY MATCHES "\\.dll\\.a$")
+        get_filename_component(ZLIB_LIBRARY_DIR "${ZLIB_LIBRARY}" DIRECTORY)
+        get_filename_component(ZLIB_PREFIX "${ZLIB_LIBRARY_DIR}" DIRECTORY)
+        find_file(ZLIB_RUNTIME_DLL
+            NAMES zlib1.dll libz.dll
+            PATHS "${ZLIB_PREFIX}/bin"
+            NO_DEFAULT_PATH
+        )
+        if(NOT ZLIB_RUNTIME_DLL)
+            message(FATAL_ERROR "Could not locate the zlib runtime DLL")
+        endif()
+        add_custom_command(TARGET blackbody_app POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ZLIB_RUNTIME_DLL}"
+                $<TARGET_FILE_DIR:blackbody_app>
+        )
+    endif()
+endif()
 
 add_executable(blackbody_tests
     tests/test_planck.cpp
@@ -129,6 +227,7 @@ add_executable(blackbody_tests
     tests/test_color.cpp
     tests/test_catalog.cpp
     tests/test_emissivity.cpp
+    tests/test_excel_import.cpp
 )
 target_compile_definitions(blackbody_tests PRIVATE
     BLACKBODY_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"

@@ -59,7 +59,9 @@ void PlotPanel::render(
         const std::vector<double> exitances =
             plottedExitances(spectrum, state.logScale);
         ImPlot::PlotLine(
-            state.selectedMaterial == 0 ? "Planck" : "Real body",
+            state.excelMode
+                ? "Excel wavelengths: Planck x emissivity"
+                : (state.selectedMaterial == 0 ? "Planck" : "Real body"),
             wavelengths.data(),
             exitances.data(),
             static_cast<int>(std::min(

@@ -10,6 +10,56 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
 {
     Actions actions;
     ImGui::Begin("Controls");
+    ImGui::SeparatorText("Planck Curve from Excel");
+    ImGui::InputText(
+        "Excel file (.xlsx)",
+        state.excelFilePath.data(),
+        state.excelFilePath.size());
+#ifdef _WIN32
+    ImGui::SameLine();
+    actions.browseExcelFile = ImGui::Button("Browse...");
+#endif
+    ImGui::SameLine();
+    actions.loadExcelFile = ImGui::Button("Load Wavelengths");
+    ImGui::InputDouble(
+        "Excel temperature (K)",
+        &state.excelTemperatureKelvin,
+        100.0,
+        500.0,
+        "%.2f");
+    ImGui::InputDouble(
+        "Emissivity (0 < eps < 1)",
+        &state.excelEmissivity,
+        0.05,
+        0.1,
+        "%.4f");
+    if (state.excelWavelengthsLoaded) {
+        ImGui::Text(
+            "Loaded %zu wavelength samples",
+            state.excelWavelengthsNanometers.size());
+    }
+    if (!state.excelError.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0f, 0.35f, 0.35f, 1.0f),
+            "%s",
+            state.excelError.c_str());
+    }
+    if (state.excelMode) {
+        ImGui::BeginDisabled(!state.excelWavelengthsLoaded);
+        actions.generateExcelSpectrum =
+            ImGui::Button("Update Planck Curve");
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        actions.returnToSimulation =
+            ImGui::Button("Return to built-in spectrum");
+    } else {
+        ImGui::BeginDisabled(!state.excelWavelengthsLoaded);
+        actions.generateExcelSpectrum =
+            ImGui::Button("Generate Planck Curve");
+        ImGui::EndDisabled();
+    }
+
+    ImGui::BeginDisabled(state.excelMode);
     const char* materials[] = {
         "Ideal Blackbody (eps=1.0)",
         "Gray Body (constant eps)",
@@ -103,6 +153,8 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
                                "Temperature estimate failed");
         }
     }
+    ImGui::EndDisabled();
+
     actions.exportExcel = ImGui::Button("Export Spectrum Excel");
     ImGui::SameLine();
     actions.exportCSV = ImGui::Button("Export CSV");

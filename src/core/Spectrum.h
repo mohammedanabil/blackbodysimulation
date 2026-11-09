@@ -26,4 +26,8 @@ public:
         double maximumWavelengthMeters,
         std::size_t steps,
         const EmissivityModel& emissivityModel);
+    static Spectrum generateAtWavelengths(
+        double temperatureKelvin,
+        const std::vector<double>& wavelengthsNanometers,
+        const EmissivityModel& emissivityModel);
 };

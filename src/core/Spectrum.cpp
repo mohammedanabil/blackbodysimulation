@@ -3,6 +3,7 @@
 #include "EmissivityModel.h"
 #include "PlanckModel.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <vector>
@@ -65,5 +66,48 @@ Spectrum SpectrumGenerator::generate(
             PlanckModel::planck(wavelength, temperatureKelvin));
     }
 
+    return spectrum;
+}
+
+Spectrum SpectrumGenerator::generateAtWavelengths(
+    double temperatureKelvin,
+    const std::vector<double>& wavelengthsNanometers,
+    const EmissivityModel& emissivityModel)
+{
+    if (!std::isfinite(temperatureKelvin) || temperatureKelvin <= 0.0) {
+        throw std::invalid_argument("temperature must be positive and finite");
+    }
+    if (wavelengthsNanometers.size() < 2) {
+        throw std::invalid_argument(
+            "at least two wavelength samples are required");
+    }
+
+    std::vector<double> sortedWavelengths = wavelengthsNanometers;
+    for (double wavelength : sortedWavelengths) {
+        if (!std::isfinite(wavelength) || wavelength <= 0.0) {
+            throw std::invalid_argument(
+                "wavelengths must be positive and finite");
+        }
+    }
+    std::sort(sortedWavelengths.begin(), sortedWavelengths.end());
+    if (std::adjacent_find(
+            sortedWavelengths.begin(),
+            sortedWavelengths.end()) != sortedWavelengths.end()) {
+        throw std::invalid_argument("wavelengths must not contain duplicates");
+    }
+
+    Spectrum spectrum;
+    spectrum.temperatureKelvin = temperatureKelvin;
+    spectrum.minimumWavelengthMeters = sortedWavelengths.front() * 1.0e-9;
+    spectrum.maximumWavelengthMeters = sortedWavelengths.back() * 1.0e-9;
+    spectrum.wavelengths.reserve(sortedWavelengths.size());
+    spectrum.exitances.reserve(sortedWavelengths.size());
+    for (double wavelengthNm : sortedWavelengths) {
+        const double wavelengthMeters = wavelengthNm * 1.0e-9;
+        spectrum.wavelengths.push_back(wavelengthMeters);
+        spectrum.exitances.push_back(
+            emissivityModel.getEmissivity(wavelengthNm, temperatureKelvin) *
+            PlanckModel::planck(wavelengthMeters, temperatureKelvin));
+    }
     return spectrum;
 }
