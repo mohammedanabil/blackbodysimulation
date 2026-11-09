@@ -10,6 +10,39 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
 {
     Actions actions;
     ImGui::Begin("Controls");
+    const char* materials[] = {
+        "Ideal Blackbody (eps=1.0)",
+        "Gray Body (constant eps)",
+        "Oxidized Steel (example CSV)",
+        "Polished Aluminum (example CSV)"
+    };
+    if (ImGui::Combo(
+            "Material Spectrum",
+            &state.selectedMaterial,
+            materials,
+            IM_ARRAYSIZE(materials))) {
+        actions.emissivityChanged = true;
+    }
+    if (state.selectedMaterial == 1) {
+        constexpr double minimumEmissivity = 0.0;
+        constexpr double maximumEmissivity = 1.0;
+        if (ImGui::SliderScalar(
+                "Constant emissivity",
+                ImGuiDataType_Double,
+                &state.constantEmissivity,
+                &minimumEmissivity,
+                &maximumEmissivity,
+                "%.2f")) {
+            actions.emissivityChanged = true;
+        }
+    }
+    if (!state.emissivityError.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0f, 0.35f, 0.35f, 1.0f),
+            "%s",
+            state.emissivityError.c_str());
+    }
+
     const auto& stars = StarCatalog::stars();
     const char* selectedName =
         stars[state.selectedStar].name.data();
@@ -48,8 +81,14 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
     state.temperature = static_cast<double>(temperature);
     ImGui::Checkbox("Show Rayleigh-Jeans approximation", &state.showRJ);
     ImGui::Checkbox("Logarithmic spectral exitance scale", &state.logScale);
+    ImGui::BeginDisabled(state.selectedMaterial >= 2);
     actions.estimateTemperature = ImGui::Button("Estimate Temperature");
-    if (state.hasTemperatureEstimate) {
+    ImGui::EndDisabled();
+    if (state.selectedMaterial >= 2) {
+        ImGui::TextDisabled(
+            "Temperature fitting supports ideal and gray-body spectra only.");
+    }
+    if (state.hasTemperatureEstimate && state.selectedMaterial < 2) {
         if (state.estimateSucceeded) {
             ImGui::Text(
                 "Estimated T: %.1f +/- %.1f K",

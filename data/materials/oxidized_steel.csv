@@ -1,0 +1,8 @@
+# Illustrative example data only; replace with measured values for quantitative work.
+# Wavelength is in nm; emissivity is dimensionless.
+100,0.72
+300,0.68
+500,0.63
+1000,0.55
+2000,0.42
+3000,0.35

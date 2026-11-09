@@ -12,6 +12,7 @@ endif()
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 add_library(blackbody_core STATIC
+    src/core/EmissivityModel.cpp
     src/core/PlanckModel.cpp
     src/core/Spectrum.cpp
     src/core/ColorConverter.cpp
@@ -99,7 +100,7 @@ add_executable(blackbody_app
     src/ui/ColorSwatch.cpp
 )
 set_target_properties(blackbody_app PROPERTIES
-    OUTPUT_NAME "Blackbody Simulation V1.2.1"
+    OUTPUT_NAME "Blackbody Simulation V2.0"
 )
 target_link_libraries(blackbody_app PRIVATE
     blackbody_core
@@ -113,7 +114,8 @@ if(WIN32)
     target_link_libraries(blackbody_app PRIVATE opengl32)
 endif()
 target_compile_definitions(blackbody_app PRIVATE
-    BLACKBODY_CIE_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/data/cie_1931.csv"
+    BLACKBODY_CIE_TABLE="data/cie_1931.csv"
+    BLACKBODY_DATA_DIR="data"
 )
 add_custom_command(TARGET blackbody_app POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -126,6 +128,7 @@ add_executable(blackbody_tests
     tests/test_export.cpp
     tests/test_color.cpp
     tests/test_catalog.cpp
+    tests/test_emissivity.cpp
 )
 target_compile_definitions(blackbody_tests PRIVATE
     BLACKBODY_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"

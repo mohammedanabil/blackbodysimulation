@@ -6,6 +6,7 @@
 
 #include "core/ColorConverter.h"
 #include "data/Exporter.h"
+#include "core/EmissivityModel.h"
 #include "core/PlanckModel.h"
 #include "core/Spectrum.h"
 #include "core/TemperatureEstimator.h"
@@ -19,6 +20,7 @@
 
 #include <iostream>
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
@@ -29,14 +31,19 @@ void framebufferSizeCallback(GLFWwindow*, int width, int height)
     glViewport(0, 0, width, height);
 }
 
-Spectrum generateRayleighJeans(const Spectrum& spectrum)
+Spectrum generateRayleighJeans(
+    const Spectrum& spectrum,
+    const EmissivityModel& emissivityModel)
 {
     Spectrum approximation = spectrum;
     approximation.exitances.clear();
     approximation.exitances.reserve(spectrum.wavelengths.size());
     for (double wavelength : spectrum.wavelengths) {
         approximation.exitances.push_back(
-            PlanckModel::rayleighJeans(wavelength, spectrum.temperatureKelvin));
+            emissivityModel.getEmissivity(
+                wavelength * 1.0e9, spectrum.temperatureKelvin) *
+            PlanckModel::rayleighJeans(
+                wavelength, spectrum.temperatureKelvin));
     }
     return approximation;
 }
@@ -62,7 +69,7 @@ App::App()
     window_ = glfwCreateWindow(
         1280,
         720,
-        "Blackbody Simulation V1.2.1",
+        "Blackbody Simulation V2.0",
         nullptr,
         nullptr);
     if (window_ == nullptr) {
@@ -105,44 +112,86 @@ App::~App()
 void App::run()
 {
     AppState state;
+    std::unique_ptr<EmissivityModel> emissivityModel =
+        std::make_unique<IdealBlackbodyModel>();
+    int activeMaterial = state.selectedMaterial;
+    const auto makeEmissivityModel = [&](int selectedMaterial) {
+        switch (selectedMaterial) {
+        case 0:
+            return std::unique_ptr<EmissivityModel>(
+                std::make_unique<IdealBlackbodyModel>());
+        case 1:
+            return std::unique_ptr<EmissivityModel>(
+                std::make_unique<ConstantEmissivityModel>(
+                    state.constantEmissivity));
+        case 2:
+            return std::unique_ptr<EmissivityModel>(
+                std::make_unique<TabulatedEmissivityModel>(
+                    TabulatedEmissivityModel::loadFromCSV(
+                        std::filesystem::path(BLACKBODY_DATA_DIR) /
+                        "materials/oxidized_steel.csv")));
+        case 3:
+            return std::unique_ptr<EmissivityModel>(
+                std::make_unique<TabulatedEmissivityModel>(
+                    TabulatedEmissivityModel::loadFromCSV(
+                        std::filesystem::path(BLACKBODY_DATA_DIR) /
+                        "materials/polished_aluminum.csv")));
+        default:
+            throw std::invalid_argument("Unknown emissivity material");
+        }
+    };
     Spectrum spectrum = SpectrumGenerator::generate(
         state.temperature,
         100.0e-9,
         3000.0e-9,
-        1200);
+        1200,
+        *emissivityModel);
     double lastTemperature = state.temperature;
     Spectrum rayleighJeans;
     bool rayleighJeansValid = false;
-    const RGB blackbodyColor =
-        ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
     RGB currentColor =
         ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
 
     while (!glfwWindowShouldClose(window_)) {
         glfwPollEvents();
 
-        if (state.temperature != lastTemperature) {
-            spectrum = SpectrumGenerator::generate(
-                state.temperature,
-                100.0e-9,
-                3000.0e-9,
-                1200);
-            lastTemperature = state.temperature;
-            currentColor =
-                ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
-        }
-        if (state.showRJ) {
-            rayleighJeans = generateRayleighJeans(spectrum);
-            rayleighJeansValid = true;
-        } else {
-            rayleighJeansValid = false;
-        }
-
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         const ControlPanel::Actions actions = ControlPanel::render(state);
+        bool emissivityUpdated = false;
+        if (actions.emissivityChanged) {
+            try {
+                emissivityModel = makeEmissivityModel(state.selectedMaterial);
+                activeMaterial = state.selectedMaterial;
+                state.emissivityError.clear();
+                emissivityUpdated = true;
+            } catch (const std::exception& error) {
+                state.selectedMaterial = activeMaterial;
+                state.emissivityError = error.what();
+                std::cerr << "Emissivity model error: " << error.what() << '\n';
+            }
+        }
+        if (state.temperature != lastTemperature || emissivityUpdated) {
+            spectrum = SpectrumGenerator::generate(
+                state.temperature,
+                100.0e-9,
+                3000.0e-9,
+                1200,
+                *emissivityModel);
+            lastTemperature = state.temperature;
+            currentColor =
+                ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
+        }
+        if (state.showRJ) {
+            rayleighJeans =
+                generateRayleighJeans(spectrum, *emissivityModel);
+            rayleighJeansValid = true;
+        } else {
+            rayleighJeansValid = false;
+        }
+
         if (actions.estimateTemperature) {
             const TemperatureEstimate estimate =
                 TemperatureEstimator::planckFit(spectrum);

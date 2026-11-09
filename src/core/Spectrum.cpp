@@ -1,5 +1,6 @@
 #include "Spectrum.h"
 
+#include "EmissivityModel.h"
 #include "PlanckModel.h"
 
 #include <cmath>
@@ -11,6 +12,22 @@ Spectrum SpectrumGenerator::generate(
     double minimumWavelengthMeters,
     double maximumWavelengthMeters,
     std::size_t steps)
+{
+    const IdealBlackbodyModel idealBlackbody;
+    return generate(
+        temperatureKelvin,
+        minimumWavelengthMeters,
+        maximumWavelengthMeters,
+        steps,
+        idealBlackbody);
+}
+
+Spectrum SpectrumGenerator::generate(
+    double temperatureKelvin,
+    double minimumWavelengthMeters,
+    double maximumWavelengthMeters,
+    std::size_t steps,
+    const EmissivityModel& emissivityModel)
 {
     if (!std::isfinite(temperatureKelvin) || temperatureKelvin <= 0.0) {
         throw std::invalid_argument("temperature must be positive and finite");
@@ -43,6 +60,8 @@ Spectrum SpectrumGenerator::generate(
         const double wavelength = minimumWavelengthMeters + fraction * interval;
         spectrum.wavelengths.push_back(wavelength);
         spectrum.exitances.push_back(
+            emissivityModel.getEmissivity(
+                wavelength * 1.0e9, temperatureKelvin) *
             PlanckModel::planck(wavelength, temperatureKelvin));
     }
 

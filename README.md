@@ -1,6 +1,6 @@
-# Blackbody Radiation Simulation
+# Blackbody Radiation Simulation V2.0
 
-A C++20 desktop simulation that visualizes blackbody spectral exitance, displays the
+A C++20 desktop simulation that visualizes blackbody and real-body spectral exitance, displays the
 derived visible color, compares the Rayleigh-Jeeans approximation, and exports
 spectrum data and plot images.
 
@@ -44,7 +44,8 @@ very large exponents are treated as effectively zero spectral exitance.
 
 1. The application accepts a temperature between 1000 K and 10000 K.
 2. It generates 1200 wavelength samples uniformly from 100 nm to 3000 nm.
-3. For each wavelength, it calculates spectral exitance with Planck's law.
+3. For each wavelength, it calculates Planck spectral exitance multiplied by
+   the selected emissivity, `M_real(lambda,T) = epsilon(lambda,T) * M_planck(lambda,T)`.
 4. It optionally calculates the Rayleigh-Jeans approximation for comparison.
 5. Wien's displacement law is used to find the expected wavelength of maximum
    emission.
@@ -54,6 +55,22 @@ very large exponents are treated as effectively zero spectral exitance.
    - peak wavelength analysis with Wien's law, or
    - nonlinear least-squares fitting with the golden-section search.
 8. The program exports the spectrum as CSV and the rendered plot as PNG.
+
+### Spectral emissivity
+
+Spectrum generation uses an `EmissivityModel` strategy. The default is an ideal
+blackbody (`epsilon = 1`); the controls also provide a constant gray-body
+emissivity and interpolated tabulated spectra. Tabulated CSV files contain
+`wavelength_nm,emissivity` rows, with `#` comments and blank lines ignored.
+Wavelengths are sorted at load time, emissivity values are clamped to `[0, 1]`,
+and values outside the table range use the nearest endpoint. Invalid or
+duplicate data is reported rather than silently ignored.
+
+The included steel and aluminum spectra are illustrative examples, not
+experimental reference data. Replace them with measured values before using
+the application for quantitative material predictions. Temperature fitting is
+disabled for these wavelength-dependent examples because the current fitter
+assumes a wavelength-independent emissivity.
 
 The temperature-fitting algorithm searches logarithmic temperature values to
 keep the search stable across a wide temperature range. It also estimates
@@ -79,6 +96,7 @@ table resolution affect the resulting colors.
 - Optional Rayleigh-Jeans approximation
 - Optional logarithmic spectral exitance axis
 - Derived blackbody color swatch
+- Ideal, gray-body, and tabulated wavelength-dependent emissivity models
 - Spectrum export to CSV
 - Window-frame export to PNG
 
@@ -116,6 +134,10 @@ Run the application:
 
 The executable name and configuration directory may differ on non-Windows
 platforms or generators.
+
+The Windows V2.0 release package includes the application, its runtime DLL, and
+the `data` directory. Extract the package and launch the executable from the
+extracted folder so the bundled color and material tables are available.
 
 ## Tests
 
