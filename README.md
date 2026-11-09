@@ -1,4 +1,4 @@
-# Blackbody Radiation Simulation V2.5
+# Blackbody Radiation Simulation V2.7
 
 A C++20 desktop simulation that visualizes blackbody and real-body spectral exitance, displays the
 derived visible color, compares the Rayleigh-Jeeans approximation, and exports
@@ -147,7 +147,7 @@ and an emissivity strictly between 0 and 1, then generate the curve. The
 imported curve replaces the built-in plot until you return to the built-in
 spectrum. Exports use the currently displayed spectrum.
 
-The Windows V2.5 release package includes the application, its runtime DLLs, and
+The Windows V2.7 release package includes the application, its runtime DLLs, and
 the `data` directory. Extract the package and launch the executable from the
 extracted folder so the bundled color and material tables are available.
 

@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 #include <algorithm>
+#include <cmath>
 
 ControlPanel::Actions ControlPanel::render(AppState& state)
 {
@@ -33,6 +34,15 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
         0.05,
         0.1,
         "%.4f");
+    const bool validExcelEmissivity =
+        std::isfinite(state.excelEmissivity) &&
+        state.excelEmissivity > 0.0 &&
+        state.excelEmissivity < 1.0;
+    if (!validExcelEmissivity) {
+        ImGui::TextColored(
+            ImVec4(1.0f, 0.35f, 0.35f, 1.0f),
+            "Error: Emissivity must be greater than 0 and less than 1.");
+    }
     if (state.excelWavelengthsLoaded) {
         ImGui::Text(
             "Loaded %zu wavelength samples",
@@ -45,7 +55,8 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
             state.excelError.c_str());
     }
     if (state.excelMode) {
-        ImGui::BeginDisabled(!state.excelWavelengthsLoaded);
+        ImGui::BeginDisabled(
+            !state.excelWavelengthsLoaded || !validExcelEmissivity);
         actions.generateExcelSpectrum =
             ImGui::Button("Update Planck Curve");
         ImGui::EndDisabled();
@@ -53,7 +64,8 @@ ControlPanel::Actions ControlPanel::render(AppState& state)
         actions.returnToSimulation =
             ImGui::Button("Return to built-in spectrum");
     } else {
-        ImGui::BeginDisabled(!state.excelWavelengthsLoaded);
+        ImGui::BeginDisabled(
+            !state.excelWavelengthsLoaded || !validExcelEmissivity);
         actions.generateExcelSpectrum =
             ImGui::Button("Generate Planck Curve");
         ImGui::EndDisabled();
