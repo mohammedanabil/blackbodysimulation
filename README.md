@@ -1,105 +1,60 @@
-# Blackbody Radiation Simulation V2.7
+# Blackbody Radiation Simulation V3.0
 
-A C++20 desktop simulation that visualizes blackbody and real-body spectral exitance, displays the
-derived visible color, compares the Rayleigh-Jeeans approximation, and exports
-spectrum data and plot images.
+A high-performance C++20 desktop scientific simulation for studying blackbody and real-body radiation,
+investigating the resolution of the Ultraviolet Catastrophe, analyzing quantum vs. classical radiation models,
+and exporting publication-grade spectra.
 
-## Physics
+## Physics & Mathematical Foundations
 
-### Planck spectral exitance
+### 1. Planck Spectral Exitance (Quantum Solution)
 
-For wavelength `lambda` in meters and absolute temperature `T` in kelvin:
+For wavelength $\lambda$ (meters) and absolute temperature $T$ (Kelvin):
 
-```text
-B_lambda(lambda, T) =
-    2hc^2 / lambda^5
-    --------------------------------
-    exp(hc / lambda k_B T) - 1
-```
+$$M_\lambda(\lambda, T) = \frac{2\pi h c^2}{\lambda^5} \frac{1}{\exp\left(\frac{hc}{\lambda k_B T}\right) - 1}$$
 
-The simulation uses SI units and `double` precision:
+- Planck's constant $h = 6.62607015 \times 10^{-34} \text{ J s}$
+- Speed of light $c = 299792458 \text{ m/s}$
+- Boltzmann constant $k_B = 1.380649 \times 10^{-23} \text{ J/K}$
+- Stefan-Boltzmann constant $\sigma = 5.670374419 \times 10^{-8} \text{ W/(m}^2\text{ K}^4\text{)}$
+- Wien displacement constant $b = 2.897771955 \times 10^{-3} \text{ m K}$
 
-- `h = 6.62607015e-34 J s`
-- `c = 299792458 m/s`
-- `k_B = 1.380649e-23 J/K`
-- `sigma = 5.670374419e-8 W/(m^2 K^4)`
-- Wien displacement constant `b = 2.897771955e-3 m K`
+### 2. Classical Approximations & The Ultraviolet Catastrophe
 
-Wien's law gives the spectral peak:
+- **Rayleigh-Jeans Law (Classical Equipartition)**:
+  $$M_\lambda(\lambda, T) = \frac{2\pi c k_B T}{\lambda^4}$$
+  Predicts infinite energy as $\lambda \to 0$ (the **Ultraviolet Catastrophe**), yet asymptotically agrees with Planck at long wavelengths ($\lambda \gg hc/k_B T$).
 
-```text
-lambda_max = b / T
-```
+- **Wien's Radiation Approximation (1896)**:
+  $$M_\lambda(\lambda, T) = \frac{2\pi h c^2}{\lambda^5} \exp\left(-\frac{hc}{\lambda k_B T}\right)$$
+  Agrees with Planck in the short-wavelength (UV) limit but underestimates exitance at long wavelengths (IR / radio).
 
-Stefan-Boltzmann total power is:
+### 3. Integrated Quantities & Energy Partition
 
-```text
-P/A = sigma * T^4
-```
+- **Stefan-Boltzmann Total Exitance**:
+  $$M_{\text{total}} = \int_0^\infty M_\lambda d\lambda = \sigma T^4$$
 
-The Planck exponential is evaluated through overflow-safe logic. Values with
-very large exponents are treated as effectively zero spectral exitance.
+- **Band Power & Energy Fractions**:
+  The application computes band exitance using adaptive composite Simpson numerical integration:
+  - **UV fraction**: $\int_0^{380\text{ nm}} M_\lambda d\lambda / M_{\text{total}}$
+  - **Visible fraction**: $\int_{380\text{ nm}}^{780\text{ nm}} M_\lambda d\lambda / M_{\text{total}}$
+  - **Infrared/Microwave fraction**: $\int_{780\text{ nm}}^\infty M_\lambda d\lambda / M_{\text{total}}$
 
-## Algorithm
-
-1. The application accepts a temperature between 1000 K and 10000 K.
-2. It generates 1200 wavelength samples uniformly from 100 nm to 3000 nm.
-3. For each wavelength, it calculates Planck spectral exitance multiplied by
-   the selected emissivity, `M_real(lambda,T) = epsilon(lambda,T) * M_planck(lambda,T)`.
-4. It optionally calculates the Rayleigh-Jeans approximation for comparison.
-5. Wien's displacement law is used to find the expected wavelength of maximum
-   emission.
-6. The spectrum is integrated with the CIE 1931 color matching functions and
-   converted from XYZ to displayable sRGB values.
-7. The temperature can be estimated from a measured spectrum using:
-   - peak wavelength analysis with Wien's law, or
-   - nonlinear least-squares fitting with the golden-section search.
-8. The program exports the spectrum as CSV and the rendered plot as PNG.
-
-### Spectral emissivity
-
-Spectrum generation uses an `EmissivityModel` strategy. The default is an ideal
-blackbody (`epsilon = 1`); the controls also provide a constant gray-body
-emissivity and interpolated tabulated spectra. Tabulated CSV files contain
-`wavelength_nm,emissivity` rows, with `#` comments and blank lines ignored.
-Wavelengths are sorted at load time, emissivity values are clamped to `[0, 1]`,
-and values outside the table range use the nearest endpoint. Invalid or
-duplicate data is reported rather than silently ignored.
-
-The included steel and aluminum spectra are illustrative examples, not
-experimental reference data. Replace them with measured values before using
-the application for quantitative material predictions. Temperature fitting is
-disabled for these wavelength-dependent examples because the current fitter
-assumes a wavelength-independent emissivity.
-
-The temperature-fitting algorithm searches logarithmic temperature values to
-keep the search stable across a wide temperature range. It also estimates
-emissivity when emissivity fitting is enabled and calculates the RMS residual
-and temperature uncertainty.
-
-## Color conversion
-
-The sample spectrum is integrated against the CIE 1931 `x`, `y`, and `z` color
-matching functions from `data/cie_1931.csv`. The resulting XYZ values are
-converted to linear sRGB using the standard D65 transformation, peak-normalized,
-gamma-corrected to sRGB, and clipped to valid channels.
-
-This is a physically informed display approximation, not a colorimetric standard
-rendering path. The sample range, interpolation method, normalization, and CIE
-table resolution affect the resulting colors.
+---
 
 ## Features
 
-- Temperature control from 1000 K to 10000 K
-- Sun, Betelgeuse, and Sirius presets
-- Interactive ImPlot radiation curve
-- Optional Rayleigh-Jeans approximation
-- Optional logarithmic spectral exitance axis
-- Derived blackbody color swatch
-- Ideal, gray-body, and tabulated wavelength-dependent emissivity models
-- Excel wavelength import for custom Planck curves with user-specified temperature and emissivity
-- Spectrum export to CSV
-- Window-frame export to PNG
+- **Multi-Model Comparison**: Real-time simultaneous plotting of Quantum Planck, Classical Rayleigh-Jeans ($1/\lambda^4$), and Wien's approximation.
+- **Ultraviolet Catastrophe Analysis Panel**: Dedicated interactive table showing exact values, divergence alerts, and percentage errors across Deep UV to Far IR.
+- **Flexible Spectral Window**: Adjust wavelength limits from nanometers to millimeters, or use one-click buttons (`UV-Vis-NIR`, `Visible`, `Auto-Peak Window`).
+- **Physical Quantities Panel**: Displays Wien peak ($\lambda_{\max}$), peak exitance, Stefan-Boltzmann total power, and UV/Visible/IR energy percentages.
+- **Multi-Temperature Curve Overlay**: Pin and overlay multiple spectra at different temperatures on the same plot for direct visual comparison.
+- **Dynamic Heating/Cooling Animation**: Smooth real-time animation with adjustable speed to observe spectral shifts and color changes.
+- **Expanded Presets**: Includes the Sun (G2V), Sirius A, Rigel, Betelgeuse, Polaris, Human Body, Earth, and Cosmic Microwave Background (CMB, 2.725 K).
+- **Physical Color Swatch**: Accurately computes true visible color via CIE 1931 color matching functions.
+- **Comprehensive Data Export**:
+  - Individual Spectrum to CSV and formatted XLSX
+  - Batch temperature sweep export across multiple temperatures
+  - High-resolution plot export to PNG
 
 ## Architecture
 

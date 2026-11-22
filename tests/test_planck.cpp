@@ -109,3 +109,36 @@ TEST_CASE("Rayleigh-Jeans converges and Planck stays finite at short wavelengths
     REQUIRE(std::isfinite(shortWavelengthExitance));
     REQUIRE(shortWavelengthExitance == 0.0);
 }
+
+TEST_CASE("Wien approximation matches Planck at short wavelengths and fails at long wavelengths", "[planck]")
+{
+    constexpr double temperature = 5000.0;
+
+    // At short wavelength (UV: 150 nm), exp(hc/lambda kT) >> 1, so Wien approximation is virtually identical to Planck
+    const double uvWavelength = 150.0e-9;
+    const double planckUV = PlanckModel::planck(uvWavelength, temperature);
+    const double wienUV = PlanckModel::wienApproximation(uvWavelength, temperature);
+    REQUIRE(planckUV > 0.0);
+    REQUIRE(wienUV == Catch::Approx(planckUV).epsilon(1.0e-5));
+
+    // At long wavelength (Far IR: 50 um), Wien approximation significantly underestimates Planck
+    const double irWavelength = 50.0e-6;
+    const double planckIR = PlanckModel::planck(irWavelength, temperature);
+    const double wienIR = PlanckModel::wienApproximation(irWavelength, temperature);
+    REQUIRE(wienIR < planckIR);
+    REQUIRE(wienIR / planckIR < 0.95);
+}
+
+TEST_CASE("Simpson integration calculates band power accurately", "[planck]")
+{
+    constexpr double temperature = 5778.0;
+    // Visible band: 380 nm to 780 nm
+    const double visiblePower =
+        PlanckModel::integrateBandPower(380.0e-9, 780.0e-9, temperature, 200);
+    const double totalPower = PlanckModel::totalPower(temperature);
+
+    // For the Sun (5778 K), visible light accounts for roughly 40-45% of total power
+    const double visibleFraction = visiblePower / totalPower;
+    REQUIRE(visibleFraction > 0.35);
+    REQUIRE(visibleFraction < 0.50);
+}

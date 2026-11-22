@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <vector>
 
+class EmissivityModel;
+
 class Exporter {
 public:
     static void toCSV(const Spectrum& spectrum, const std::filesystem::path& outputPath);
@@ -14,4 +16,11 @@ public:
         int width,
         int height,
         const std::vector<unsigned char>& rgbaPixels);
+    static void batchToCSV(
+        const std::vector<double>& temperaturesKelvin,
+        double minWavelengthMeters,
+        double maxWavelengthMeters,
+        std::size_t steps,
+        const EmissivityModel& emissivityModel,
+        const std::filesystem::path& outputPath);
 };

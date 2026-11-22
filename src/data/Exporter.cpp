@@ -158,3 +158,62 @@ void Exporter::toPNG(
             "Could not write PNG output file: " + outputPath.string());
     }
 }
+
+void Exporter::batchToCSV(
+    const std::vector<double>& temperaturesKelvin,
+    double minWavelengthMeters,
+    double maxWavelengthMeters,
+    std::size_t steps,
+    const EmissivityModel& emissivityModel,
+    const std::filesystem::path& outputPath)
+{
+    if (temperaturesKelvin.empty()) {
+        throw std::invalid_argument("Temperatures vector must not be empty");
+    }
+    if (outputPath.empty()) {
+        throw std::invalid_argument("CSV output path must not be empty");
+    }
+    if (steps < 2) {
+        throw std::invalid_argument("Steps must be at least 2");
+    }
+
+    const std::filesystem::path parentPath = outputPath.parent_path();
+    if (!parentPath.empty()) {
+        std::filesystem::create_directories(parentPath);
+    }
+
+    std::vector<Spectrum> spectra;
+    spectra.reserve(temperaturesKelvin.size());
+    for (double T : temperaturesKelvin) {
+        spectra.push_back(SpectrumGenerator::generate(
+            T, minWavelengthMeters, maxWavelengthMeters, steps, emissivityModel));
+    }
+
+    std::ofstream output(outputPath);
+    if (!output.is_open()) {
+        throw std::runtime_error("Could not open CSV output file: " + outputPath.string());
+    }
+
+    output.exceptions(std::ios::failbit | std::ios::badbit);
+
+    output << "Wavelength (m),Wavelength (nm)";
+    for (double T : temperaturesKelvin) {
+        output << ",T=" << static_cast<long long>(T) << "K (W/m³)";
+    }
+    output << '\n';
+
+    output << std::scientific << std::setprecision(17);
+    for (std::size_t i = 0; i < steps; ++i) {
+        const double wM = spectra[0].wavelengths[i];
+        output << wM << ',' << wM * 1.0e9;
+        for (const auto& sp : spectra) {
+            output << ',' << sp.exitances[i];
+        }
+        output << '\n';
+    }
+
+    output.close();
+    if (!output) {
+        throw std::runtime_error("Could not write CSV output file: " + outputPath.string());
+    }
+}

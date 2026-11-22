@@ -1,4 +1,5 @@
 #include "core/Spectrum.h"
+#include "core/EmissivityModel.h"
 #include "data/Exporter.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -98,6 +99,31 @@ TEST_CASE("Exporter writes a PNG file", "[export]")
     REQUIRE(signature[1] == 0x50);
     REQUIRE(signature[2] == 0x4E);
     REQUIRE(signature[3] == 0x47);
+
+    input.close();
+    std::filesystem::remove(outputPath);
+}
+
+TEST_CASE("Exporter writes batch multi-temperature CSV file", "[export]")
+{
+    const std::filesystem::path outputPath =
+        std::filesystem::temp_directory_path() /
+        "blackbody_batch_test.csv";
+
+    std::filesystem::remove(outputPath);
+    const IdealBlackbodyModel ideal;
+    Exporter::batchToCSV({2000.0, 4000.0, 6000.0}, 200.0e-9, 1000.0e-9, 10, ideal, outputPath);
+
+    REQUIRE(std::filesystem::exists(outputPath));
+
+    std::ifstream input(outputPath);
+    REQUIRE(input.is_open());
+
+    std::string header;
+    std::getline(input, header);
+    REQUIRE(header.find("T=2000") != std::string::npos);
+    REQUIRE(header.find("T=4000") != std::string::npos);
+    REQUIRE(header.find("T=6000") != std::string::npos);
 
     input.close();
     std::filesystem::remove(outputPath);

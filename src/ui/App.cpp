@@ -62,6 +62,43 @@ Spectrum generateRayleighJeans(
     return approximation;
 }
 
+Spectrum generateWienApproximation(
+    const Spectrum& spectrum,
+    const EmissivityModel& emissivityModel)
+{
+    Spectrum approximation = spectrum;
+    approximation.exitances.clear();
+    approximation.exitances.reserve(spectrum.wavelengths.size());
+    for (double wavelength : spectrum.wavelengths) {
+        approximation.exitances.push_back(
+            emissivityModel.getEmissivity(
+                wavelength * 1.0e9, spectrum.temperatureKelvin) *
+            PlanckModel::wienApproximation(
+                wavelength, spectrum.temperatureKelvin));
+    }
+    return approximation;
+}
+
+void updatePhysicsQuantities(AppState& state, const EmissivityModel& emissivityModel)
+{
+    state.physics.peakWavelengthMeters = PlanckModel::wienPeak(state.temperature);
+    state.physics.peakExitance =
+        emissivityModel.getEmissivity(state.physics.peakWavelengthMeters * 1.0e9, state.temperature) *
+        PlanckModel::planck(state.physics.peakWavelengthMeters, state.temperature);
+    state.physics.totalPower = PlanckModel::totalPower(state.temperature);
+
+    const double totalP = state.physics.totalPower;
+    if (totalP > 0.0) {
+        const double pVis = PlanckModel::integrateBandPower(380.0e-9, 780.0e-9, state.temperature, 100);
+        const double pUv = PlanckModel::integrateBandPower(1.0e-9, 380.0e-9, state.temperature, 100);
+        const double pIr = std::max(0.0, totalP - pUv - pVis);
+
+        state.physics.uvFraction = std::clamp(pUv / totalP, 0.0, 1.0);
+        state.physics.visibleFraction = std::clamp(pVis / totalP, 0.0, 1.0);
+        state.physics.irFraction = std::clamp(pIr / totalP, 0.0, 1.0);
+    }
+}
+
 #ifdef _WIN32
 bool chooseExcelFile(std::array<char, 1024>& filePath)
 {
@@ -117,7 +154,7 @@ App::App()
     window_ = glfwCreateWindow(
         1280,
         720,
-        "Blackbody Simulation V2.7",
+        "Blackbody Simulation V3.0",
         nullptr,
         nullptr);
     if (window_ == nullptr) {
@@ -190,18 +227,40 @@ void App::run()
     };
     Spectrum spectrum = SpectrumGenerator::generate(
         state.temperature,
-        100.0e-9,
-        3000.0e-9,
-        1200,
+        state.minWavelengthNm * 1.0e-9,
+        state.maxWavelengthNm * 1.0e-9,
+        static_cast<std::size_t>(state.wavelengthSamples),
         *emissivityModel);
+    updatePhysicsQuantities(state, *emissivityModel);
     double lastTemperature = state.temperature;
+    double lastMinWavelength = state.minWavelengthNm;
+    double lastMaxWavelength = state.maxWavelengthNm;
     Spectrum rayleighJeans;
     bool rayleighJeansValid = false;
+    Spectrum wienApproximation;
+    bool wienValid = false;
     RGB currentColor =
         ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
+    std::string exportMessage;
+    double lastFrameTime = glfwGetTime();
 
     while (!glfwWindowShouldClose(window_)) {
         glfwPollEvents();
+
+        const double currentFrameTime = glfwGetTime();
+        const double deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
+        if (state.isAnimating && !state.excelMode) {
+            state.temperature += static_cast<double>(state.animDirection) * state.animationSpeed * deltaTime;
+            if (state.temperature >= state.animMaxT) {
+                state.temperature = state.animMaxT;
+                state.animDirection = -1;
+            } else if (state.temperature <= state.animMinT) {
+                state.temperature = state.animMinT;
+                state.animDirection = 1;
+            }
+        }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -210,6 +269,24 @@ void App::run()
         const ControlPanel::Actions actions = ControlPanel::render(state);
         bool emissivityUpdated = false;
         bool refreshBuiltInSpectrum = false;
+
+        if (actions.pinCurrentCurve) {
+            PinnedCurve pinned;
+            pinned.temperatureKelvin = state.temperature;
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "T = %.0f K", state.temperature);
+            pinned.name = buf;
+            pinned.wavelengths.reserve(spectrum.wavelengths.size());
+            for (double w : spectrum.wavelengths) {
+                pinned.wavelengths.push_back(w * 1.0e9);
+            }
+            pinned.exitances = spectrum.exitances;
+            pinned.visible = true;
+            state.pinnedCurves.push_back(std::move(pinned));
+        }
+        if (actions.clearPinnedCurves) {
+            state.pinnedCurves.clear();
+        }
 #ifdef _WIN32
         if (actions.browseExcelFile) {
             try {
@@ -246,9 +323,9 @@ void App::run()
                 }
                 if (!std::isfinite(state.excelEmissivity) ||
                     state.excelEmissivity <= 0.0 ||
-                    state.excelEmissivity >= 1.0) {
+                    state.excelEmissivity > 1.0) {
                     throw std::invalid_argument(
-                        "Emissivity must be greater than 0 and less than 1");
+                        "Emissivity must be greater than 0 and at most 1");
                 }
                 const ConstantEmissivityModel excelEmissivity(
                     state.excelEmissivity);
@@ -288,17 +365,26 @@ void App::run()
         }
         if (!state.excelMode &&
             (refreshBuiltInSpectrum ||
+             actions.wavelengthRangeChanged ||
              state.temperature != lastTemperature ||
+             state.minWavelengthNm != lastMinWavelength ||
+             state.maxWavelengthNm != lastMaxWavelength ||
              emissivityUpdated)) {
             spectrum = SpectrumGenerator::generate(
                 state.temperature,
-                100.0e-9,
-                3000.0e-9,
-                1200,
+                state.minWavelengthNm * 1.0e-9,
+                state.maxWavelengthNm * 1.0e-9,
+                static_cast<std::size_t>(state.wavelengthSamples),
                 *emissivityModel);
             lastTemperature = state.temperature;
+            lastMinWavelength = state.minWavelengthNm;
+            lastMaxWavelength = state.maxWavelengthNm;
+            updatePhysicsQuantities(state, *emissivityModel);
+
+            const Spectrum opticalBand = SpectrumGenerator::generate(
+                state.temperature, 380.0e-9, 780.0e-9, 401, *emissivityModel);
             currentColor =
-                ColorConverter::spectrumToRGB(spectrum, BLACKBODY_CIE_TABLE);
+                ColorConverter::spectrumToRGB(opticalBand, BLACKBODY_CIE_TABLE);
         }
         if (state.showRJ) {
             if (state.excelMode) {
@@ -315,6 +401,21 @@ void App::run()
             rayleighJeansValid = false;
         }
 
+        if (state.showWien) {
+            if (state.excelMode) {
+                const ConstantEmissivityModel excelEmissivity(
+                    state.activeExcelEmissivity);
+                wienApproximation =
+                    generateWienApproximation(spectrum, excelEmissivity);
+            } else {
+                wienApproximation =
+                    generateWienApproximation(spectrum, *emissivityModel);
+            }
+            wienValid = true;
+        } else {
+            wienValid = false;
+        }
+
         if (actions.estimateTemperature) {
             const TemperatureEstimate estimate =
                 TemperatureEstimator::planckFit(spectrum);
@@ -329,20 +430,64 @@ void App::run()
             }
         }
         if (actions.exportCSV) {
-            Exporter::toCSV(
-                spectrum,
-                std::filesystem::path("blackbody_spectrum.csv"));
+            try {
+                const std::filesystem::path outPath =
+                    std::filesystem::absolute("blackbody_spectrum.csv");
+                Exporter::toCSV(spectrum, outPath);
+                exportMessage = "Saved: " + outPath.string();
+            } catch (const std::exception& error) {
+                exportMessage = std::string("Export failed: ") + error.what();
+                std::cerr << exportMessage << '\n';
+            }
+        }
+        if (actions.exportBatchCSV) {
+            try {
+                const std::filesystem::path outPath =
+                    std::filesystem::absolute("blackbody_batch_sweep.csv");
+                const std::vector<double> sweepTemps = {
+                    1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 5778.0, 7000.0, 8500.0, 10000.0
+                };
+                Exporter::batchToCSV(
+                    sweepTemps,
+                    state.minWavelengthNm * 1.0e-9,
+                    state.maxWavelengthNm * 1.0e-9,
+                    static_cast<std::size_t>(state.wavelengthSamples),
+                    *emissivityModel,
+                    outPath);
+                exportMessage = "Saved: " + outPath.string();
+            } catch (const std::exception& error) {
+                exportMessage = std::string("Export failed: ") + error.what();
+                std::cerr << exportMessage << '\n';
+            }
         }
         if (actions.exportExcel) {
-            Exporter::toExcel(
-                spectrum,
-                std::filesystem::path("blackbody_spectrum.xlsx"));
+            try {
+                const std::filesystem::path outPath =
+                    std::filesystem::absolute("blackbody_spectrum.xlsx");
+                Exporter::toExcel(spectrum, outPath);
+                exportMessage = "Saved: " + outPath.string();
+            } catch (const std::exception& error) {
+                exportMessage = std::string("Export failed: ") + error.what();
+                std::cerr << exportMessage << '\n';
+            }
         }
         PlotPanel::render(
             spectrum,
             rayleighJeansValid ? &rayleighJeans : nullptr,
+            wienValid ? &wienApproximation : nullptr,
             state);
         ColorSwatch::render(currentColor);
+
+        if (!exportMessage.empty()) {
+            ImGui::Begin("Export", nullptr,
+                ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoCollapse);
+            ImGui::TextUnformatted(exportMessage.c_str());
+            if (ImGui::Button("OK")) {
+                exportMessage.clear();
+            }
+            ImGui::End();
+        }
 
         ImGui::Render();
         int displayWidth = 0;
@@ -354,23 +499,27 @@ void App::run()
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         if (actions.exportPNG) {
-            std::vector<unsigned char> pixels(
-                static_cast<std::size_t>(displayWidth) *
-                static_cast<std::size_t>(displayHeight) * 4);
-            glPixelStorei(GL_PACK_ALIGNMENT, 1);
-            glReadPixels(
-                0,
-                0,
-                displayWidth,
-                displayHeight,
-                GL_RGBA,
-                GL_UNSIGNED_BYTE,
-                pixels.data());
-            Exporter::toPNG(
-                std::filesystem::path("blackbody_plot.png"),
-                displayWidth,
-                displayHeight,
-                pixels);
+            try {
+                std::vector<unsigned char> pixels(
+                    static_cast<std::size_t>(displayWidth) *
+                    static_cast<std::size_t>(displayHeight) * 4);
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glReadPixels(
+                    0,
+                    0,
+                    displayWidth,
+                    displayHeight,
+                    GL_RGBA,
+                    GL_UNSIGNED_BYTE,
+                    pixels.data());
+                const std::filesystem::path outPath =
+                    std::filesystem::absolute("blackbody_plot.png");
+                Exporter::toPNG(outPath, displayWidth, displayHeight, pixels);
+                exportMessage = "Saved: " + outPath.string();
+            } catch (const std::exception& error) {
+                exportMessage = std::string("Export failed: ") + error.what();
+                std::cerr << exportMessage << '\n';
+            }
         }
 
         glfwSwapBuffers(window_);

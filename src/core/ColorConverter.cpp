@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -61,6 +63,21 @@ std::vector<CIETriplet> loadCIE(const std::filesystem::path& path)
     return rows;
 }
 
+// Cache: load each CIE table from disk only once per path.
+const std::vector<CIETriplet>& cachedCIE(const std::filesystem::path& path)
+{
+    static std::mutex mutex;
+    static std::unordered_map<std::string, std::vector<CIETriplet>> cache;
+
+    const std::string key = path.string();
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = cache.find(key);
+    if (it == cache.end()) {
+        it = cache.emplace(key, loadCIE(path)).first;
+    }
+    return it->second;
+}
+
 double interpolate(
     const std::vector<double>& wavelengths,
     const std::vector<double>& values,
@@ -108,7 +125,7 @@ RGB ColorConverter::spectrumToRGB(
         throw std::invalid_argument("Spectrum must contain at least one sample");
     }
 
-    const std::vector<CIETriplet> cie = loadCIE(cieTablePath);
+    const std::vector<CIETriplet>& cie = cachedCIE(cieTablePath);
 
     double x = 0.0;
     double y = 0.0;
@@ -156,3 +173,4 @@ RGB ColorConverter::spectrumToRGB(
         linearToSRGB(linearBlue / maximum)
     };
 }
+

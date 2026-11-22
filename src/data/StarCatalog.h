@@ -7,6 +7,7 @@
 struct Preset {
     std::string_view name;
     double temperatureKelvin = 0.0;
+    std::string_view description = "";
 };
 
 namespace StarCatalog {

@@ -162,7 +162,7 @@ add_executable(blackbody_app
     src/ui/ColorSwatch.cpp
 )
 set_target_properties(blackbody_app PROPERTIES
-    OUTPUT_NAME "Blackbody Simulation V2.7"
+    OUTPUT_NAME "Blackbody Simulation V3.0"
 )
 target_link_libraries(blackbody_app PRIVATE
     blackbody_core
